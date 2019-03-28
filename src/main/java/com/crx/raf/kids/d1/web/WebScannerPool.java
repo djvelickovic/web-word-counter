@@ -23,6 +23,6 @@ public class WebScannerPool extends ScannerPool {
         CompletableFuture<Map<String, Integer>> future = job.initiate(executorService);
         String query = job.getQuery();
         logger.info("Assigned {} job with query {}",job.getType(), job.getQuery());
-        resultRetrieverPool.pushResult(query, future);
+        resultRetrieverPool.addCorpusResult(query, future);
     }
 }

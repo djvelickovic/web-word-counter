@@ -12,29 +12,37 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 public class WebJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(WebJob.class);
+
+    private static final Set<String> deduplicier = ConcurrentHashMap.newKeySet();
 
     private final String uri;
     private String host;
     private final int hops;
     private final JobQueue jobQueue;
 
-    public WebJob(String uri, int hops, JobQueue jobQueue) {
+    private final Set<String> keywords;
+
+    private boolean error = false;
+    public WebJob(Set<String> keywords, String uri, int hops, JobQueue jobQueue) {
         this.uri = uri;
         this.hops = hops;
         this.jobQueue = jobQueue;
+        this.keywords = keywords;
 
         try {
             this.host = new URI(uri).getHost();
         } catch (URISyntaxException e) {
             e.printStackTrace();
+            error = true;
         }
     }
 
@@ -45,7 +53,7 @@ public class WebJob implements Job {
 
     @Override
     public String getQuery() {
-        return "web|"+uri;
+        return "web|"+host;
     }
 
     @Override
@@ -57,8 +65,18 @@ public class WebJob implements Job {
     }
 
     private Map<String, Integer> job() {
+
+        Map<String, Integer> map = keywords.stream().collect(Collectors.toMap(t -> t, t-> 0));
+
         try {
 //            String url = "https://www.google.com/";
+            if (error || uri.endsWith(".pdf") || uri.endsWith(".jpg") || uri.endsWith(".docx") || uri.endsWith(".rar") ||  deduplicier.contains(uri)){
+                logger.info("Skipping {}...", uri);
+                return new HashMap<>();
+            }
+            else {
+                deduplicier.add(uri);
+            }
 
             logger.info("Fetching {}...", uri);
 
@@ -68,13 +86,26 @@ public class WebJob implements Job {
             logger.info("Links size: ({})", links.size());
             for (Element link : links) {
                 String l = link.attr("abs:href");
-                jobQueue.add(new WebJob(l, hops - 1, jobQueue));
+                jobQueue.add(new WebJob(keywords, l, hops - 1, jobQueue));
                 logger.info("Link: ({})", l);
             }
+
+
+//            Arrays.stream(doc.body().text().trim().split("\\s+")).filter(words::contains).map()
+
+            String[] words = doc.body().text().trim().split("\\s+");
+
+            for (String word : words) {
+                if (keywords.contains(word)) {
+                    Integer i = map.get(word);
+                    map.put(word, i + 1);
+                }
+            }
+            return map;
         }
         catch (Exception e){
             e.printStackTrace();
         }
-        return new HashMap<>();
+        return map;
     }
 }

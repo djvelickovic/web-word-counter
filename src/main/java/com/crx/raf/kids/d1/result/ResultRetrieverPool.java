@@ -1,20 +1,23 @@
 package com.crx.raf.kids.d1.result;
 
+import com.crx.raf.kids.d1.job.ScanType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class ResultRetrieverPool {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultRetrieverPool.class);
     private final Map<String, List<CompletableFuture<Map<String, Integer>>>> queryResultsMap = new ConcurrentHashMap<>();
 
-    public void pushResult(String query, CompletableFuture<Map<String, Integer>> result) {
+    public void addCorpusResult(String query, CompletableFuture<Map<String, Integer>> result) {
         logger.info("Result: "+query);
         List<CompletableFuture<Map<String, Integer>>> list = queryResultsMap.putIfAbsent(query, new ArrayList<>()); // TODO: reconsider?
         if (list == null) {
@@ -22,5 +25,57 @@ public class ResultRetrieverPool {
         }
         list.add(result);
     }
+
+
+    public Map<String, Integer> getResult(String query) {
+        // also check if there are jobs in queue for query
+
+        List<CompletableFuture<Map<String, Integer>>> list = queryResultsMap.get(query);
+
+        long unfinishedJobs = list.stream().filter(cf -> !cf.isDone()).count();
+
+        if (unfinishedJobs > 0) {
+            logger.warn("Job {} is still running.");
+            return null;
+        }
+
+        List<Map<String, Integer>> results = list.stream().map(cf -> {
+            try {
+                return cf.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return new HashMap<String, Integer>();
+        }).collect(Collectors.toList());
+
+        Map<String, Integer> result = new HashMap<>();
+
+        for (Map<String, Integer> r : results) {
+            r.forEach((k ,v) -> {
+                Integer i = result.getOrDefault(k, 0);
+                result.put(k, i + v);
+            });
+        }
+
+        return result;
+    }
+
+    public Map<String, Integer> queryResult(String query) {
+        return null;
+    }
+
+    public void clearSummary(ScanType summaryType) {
+
+    }
+
+    public Map<String, Map<String, Integer>> getSummary(ScanType summaryType) {
+        return null;
+    }
+    public Map<String, Map<String, Integer>> querySummary(ScanType summaryType) {
+        return null;
+    }
+//    public void addCorpusResult(String corpusName, Future<Map<String, Integer>> corpusResult);
+
+
 
 }

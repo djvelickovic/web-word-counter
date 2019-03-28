@@ -6,7 +6,9 @@ import com.crx.raf.kids.d1.result.ResultRetrieverPool;
 import com.crx.raf.kids.d1.web.WebJob;
 import com.crx.raf.kids.d1.web.WebScannerPool;
 
+import java.util.HashSet;
 import java.util.Scanner;
+import java.util.Set;
 
 public class Main {
 
@@ -19,15 +21,21 @@ public class Main {
 
         ResultRetrieverPool resultRetrieverPool = new ResultRetrieverPool();
 
-
-        FileScannerPool fileScannerPool = new FileScannerPool(jobQueue, resultRetrieverPool, 5);
-        WebScannerPool webScannerPool = new WebScannerPool(jobQueue, resultRetrieverPool, 5);
+        FileScannerPool fileScannerPool = new FileScannerPool(jobQueue, resultRetrieverPool, 10);
+        WebScannerPool webScannerPool = new WebScannerPool(jobQueue, resultRetrieverPool, 10);
 
         JobDispatcher jobDispatcher = new JobDispatcher(webScannerPool, fileScannerPool, jobQueue);
 
         new Thread(jobDispatcher).start();
 
         Scanner scanner = new Scanner(System.in);
+
+
+        Set<String> keywords = new HashSet<>();
+        keywords.add("greska");
+        keywords.add("Petar");
+        keywords.add("fakultet");
+        keywords.add("raf");
 
         while (true) {
             String input = scanner.nextLine();
@@ -36,8 +44,11 @@ public class Main {
 
             switch (tokens[0]) {
                 case "aw":
-                    WebJob webJob = new WebJob(tokens[1], 1, jobQueue);
+                    WebJob webJob = new WebJob(keywords, tokens[1], 1, jobQueue);
                     jobQueue.add(webJob);
+                    break;
+                case "get":
+                    System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
                     break;
                 case "ad":
                     break;
