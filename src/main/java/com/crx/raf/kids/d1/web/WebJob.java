@@ -50,7 +50,7 @@ public class WebJob implements Job {
         try {
             String host = new URI(uri).getHost();
 //            System.err.println(host + " - " + uri);
-            return Result.of(host);
+            return Result.of("web|"+host);
         }
         catch (Exception e){
             logger.error("Unable to fetch host from URI: {}", uri);
