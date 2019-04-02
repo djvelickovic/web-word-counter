@@ -38,9 +38,13 @@ public class Main {
         keywords.add("raf");
 
         while (true) {
+
             String input = scanner.nextLine();
 
             String[] tokens = input.split("\\s+");
+
+            String t = tokens[0];
+            System.out.println(t);
 
             switch (tokens[0]) {
                 case "aw":

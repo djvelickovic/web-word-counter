@@ -1,6 +1,9 @@
 package com.crx.raf.kids.d1.result;
 
 import com.crx.raf.kids.d1.job.ScanType;
+import com.crx.raf.kids.d1.util.Error;
+import com.crx.raf.kids.d1.util.ErrorCode;
+import com.crx.raf.kids.d1.util.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,11 +18,15 @@ import java.util.stream.Collectors;
 public class ResultRetrieverPool {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultRetrieverPool.class);
-    private final Map<String, List<CompletableFuture<Map<String, Integer>>>> queryResultsMap = new ConcurrentHashMap<>();
+    private final Map<String, List<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
 
-    public void addCorpusResult(String query, CompletableFuture<Map<String, Integer>> result) {
-        logger.info("Result: "+query);
-        List<CompletableFuture<Map<String, Integer>>> list = queryResultsMap.putIfAbsent(query, new ArrayList<>()); // TODO: reconsider?
+    public void addCorpusResult(String query, CompletableFuture<Result<Map<String, Integer>>> result) {
+        if (query == null) {
+            System.err.println("QUERY IS NULL?!");
+            return;
+        }
+
+        List<CompletableFuture<Result<Map<String, Integer>>>> list = queryResultsMap.putIfAbsent(query, new ArrayList<>()); // TODO: reconsider?
         if (list == null) {
             list = queryResultsMap.get(query);
         }
@@ -30,23 +37,40 @@ public class ResultRetrieverPool {
     public Map<String, Integer> getResult(String query) {
         // also check if there are jobs in queue for query
 
-        List<CompletableFuture<Map<String, Integer>>> list = queryResultsMap.get(query);
+        List<CompletableFuture<Result<Map<String, Integer>>>> list = queryResultsMap.get(query);
+
+        if (list == null) {
+            logger.warn("List is empty for query: {}", query);
+            return null;
+        }
 
         long unfinishedJobs = list.stream().filter(cf -> !cf.isDone()).count();
 
         if (unfinishedJobs > 0) {
-            logger.warn("Job {} is still running.");
+            logger.warn("{} Jobs are still running.", unfinishedJobs);
             return null;
         }
 
-        List<Map<String, Integer>> results = list.stream().map(cf -> {
-            try {
-                return cf.get();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            return new HashMap<String, Integer>();
-        }).collect(Collectors.toList());
+        logger.info("Started collecting jobs by query {}", query);
+
+        List<Map<String, Integer>> results = list.stream()
+                .map(cf -> {
+                    try {
+                        return cf.get();
+                    } catch (Exception e) {
+                        return Result.<Map<String, Integer>>error(Error.of(ErrorCode.JOB_ERROR, e.getMessage()));
+                    }
+                })
+                .filter(r -> {
+                    if (r.isError()) {
+                        logger.warn("Job error: {}",r.getError());
+                        return false;
+                    }
+                    return true;
+                })
+                .map(Result::getValue).collect(Collectors.toList());
+
+        logger.info("Finished collecting jobs by query {}", query);
 
         Map<String, Integer> result = new HashMap<>();
 
@@ -56,6 +80,8 @@ public class ResultRetrieverPool {
                 result.put(k, i + v);
             });
         }
+
+        logger.info("Query RESULT: {}", result);
 
         return result;
     }

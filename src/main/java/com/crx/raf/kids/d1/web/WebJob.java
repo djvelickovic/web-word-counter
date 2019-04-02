@@ -3,6 +3,9 @@ package com.crx.raf.kids.d1.web;
 import com.crx.raf.kids.d1.job.Job;
 import com.crx.raf.kids.d1.job.JobQueue;
 import com.crx.raf.kids.d1.job.ScanType;
+import com.crx.raf.kids.d1.util.Error;
+import com.crx.raf.kids.d1.util.ErrorCode;
+import com.crx.raf.kids.d1.util.Result;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -11,39 +14,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.stream.Collectors;
 
 public class WebJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(WebJob.class);
+    private static final Set<String> doneWebJobQueries = ConcurrentHashMap.newKeySet();
 
-    private static final Set<String> deduplicier = ConcurrentHashMap.newKeySet();
 
     private final String uri;
-    private String host;
     private final int hops;
     private final JobQueue jobQueue;
 
     private final Set<String> keywords;
 
-    private boolean error = false;
     public WebJob(Set<String> keywords, String uri, int hops, JobQueue jobQueue) {
         this.uri = uri;
         this.hops = hops;
         this.jobQueue = jobQueue;
         this.keywords = keywords;
-
-        try {
-            this.host = new URI(uri).getHost();
-        } catch (URISyntaxException e) {
-            e.printStackTrace();
-            error = true;
-        }
     }
 
     @Override
@@ -52,30 +46,36 @@ public class WebJob implements Job {
     }
 
     @Override
-    public String getQuery() {
-        return "web|"+host;
+    public Result<String> getQuery() {
+        try {
+            String host = new URI(uri).getHost();
+//            System.err.println(host + " - " + uri);
+            return Result.of(host);
+        }
+        catch (Exception e){
+            logger.error("Unable to fetch host from URI: {}", uri);
+            return Result.error(Error.of(ErrorCode.URL_PARSING_ERROR, e.getMessage()));
+        }
     }
 
     @Override
-    public CompletableFuture<Map<String, Integer>> initiate(Executor executorService) {
+    public CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executorService) {
         if (hops < 0) {
-            return CompletableFuture.completedFuture(new HashMap<>());
+            return CompletableFuture.completedFuture(Result.of(new HashMap<>()));
         }
         return CompletableFuture.supplyAsync(this::job, executorService);
     }
 
-    private Map<String, Integer> job() {
-
-        Map<String, Integer> map = keywords.stream().collect(Collectors.toMap(t -> t, t-> 0));
-
+    private Result<Map<String, Integer>> job() {
         try {
-//            String url = "https://www.google.com/";
-            if (error || uri.endsWith(".pdf") || uri.endsWith(".jpg") || uri.endsWith(".docx") || uri.endsWith(".rar") ||  deduplicier.contains(uri)){
-                logger.info("Skipping {}...", uri);
-                return new HashMap<>();
+            if (!doneWebJobQueries.add(uri)) {
+                logger.info("Skipping job {}", uri);
+                return Result.of(new HashMap<>());
             }
-            else {
-                deduplicier.add(uri);
+
+            if (uri.endsWith(".pdf") || uri.endsWith(".jpg") || uri.endsWith(".docx") || uri.endsWith(".rar")){
+                logger.info("Skipping. Format unsupported. {}...", uri);
+                return Result.of(new HashMap<>());
             }
 
             logger.info("Fetching {}...", uri);
@@ -86,26 +86,34 @@ public class WebJob implements Job {
             logger.info("Links size: ({})", links.size());
             for (Element link : links) {
                 String l = link.attr("abs:href");
-                jobQueue.add(new WebJob(keywords, l, hops - 1, jobQueue));
-                logger.info("Link: ({})", l);
+                if (l.startsWith("http")) {
+                    jobQueue.add(new WebJob(keywords, l, hops - 1, jobQueue));
+                    logger.info("Link: ({})", l);
+                }
+                else {
+                    logger.error("UNKNOWN PROTOCOL: {}", l);
+                }
             }
-
-
 //            Arrays.stream(doc.body().text().trim().split("\\s+")).filter(words::contains).map()
 
             String[] words = doc.body().text().trim().split("\\s+");
 
-            for (String word : words) {
-                if (keywords.contains(word)) {
-                    Integer i = map.get(word);
-                    map.put(word, i + 1);
+            Map<String, Integer> map = new HashMap<>();
+
+            for (String keyword : keywords) {
+                int count = 0;
+                for (String word : words) {
+                    if (keyword.equals(word)){
+                        count++;
+                    }
                 }
+                map.put(keyword, count);
             }
-            return map;
+            logger.info("RESULT for QUERY {}: {}", getQuery(), map);
+            return Result.of(map);
         }
         catch (Exception e){
-            e.printStackTrace();
+            return Result.error(Error.of(ErrorCode.CRAWLER_ERROR, e.getMessage()));
         }
-        return map;
     }
 }
