@@ -1,5 +1,6 @@
 package com.crx.raf.kids.d1.result;
 
+import com.crx.raf.kids.d1.Pool;
 import com.crx.raf.kids.d1.job.ScanType;
 import com.crx.raf.kids.d1.util.Error;
 import com.crx.raf.kids.d1.util.ErrorCode;
@@ -15,10 +16,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-public class ResultRetrieverPool {
+public class ResultRetrieverPool extends Pool {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultRetrieverPool.class);
     private final Map<String, List<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
+
+    public ResultRetrieverPool(int poolSize) {
+        super(poolSize);
+    }
 
     public void addCorpusResult(String query, CompletableFuture<Result<Map<String, Integer>>> result) {
         if (query == null) {
