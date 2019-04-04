@@ -19,7 +19,7 @@ public class Main {
         DirectoryCrawler directoryCrawler = new DirectoryCrawler();
         JobQueue jobQueue = new JobQueue();
 
-        ResultRetrieverPool resultRetrieverPool = new ResultRetrieverPool();
+        ResultRetrieverPool resultRetrieverPool = new ResultRetrieverPool(10);
 
         FileScannerPool fileScannerPool = new FileScannerPool(jobQueue, resultRetrieverPool, 10);
         WebScannerPool webScannerPool = new WebScannerPool(jobQueue, resultRetrieverPool, 10);
@@ -39,28 +39,33 @@ public class Main {
 
         while (true) {
 
-            String input = scanner.nextLine();
+            try {
+                String input = scanner.nextLine();
+                String[] tokens = input.split("\\s+");
 
-            String[] tokens = input.split("\\s+");
-
-            String t = tokens[0];
-            System.out.println(t);
-
-            switch (tokens[0]) {
-                case "aw":
-                    WebJob webJob = new WebJob(keywords, tokens[1], 1, jobQueue);
-                    jobQueue.add(webJob);
-                    break;
-                case "get":
-                    System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
-                    break;
-                case "ad":
-                    break;
-                case "exit":
-                    // shutdown application
-                    // run = false;
-                    System.exit(1); // remove, shutdown gracefully
-                    break;
+                switch (tokens[0]) {
+                    case "aw":
+                        WebJob webJob = new WebJob(keywords, tokens[1], 1, jobQueue);
+                        jobQueue.add(webJob);
+                        break;
+                    case "get":
+                        System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
+                        break;
+                    case "query":
+                        System.out.println(resultRetrieverPool.queryResult(tokens[1]).toString());
+                        break;
+                    case "ad":
+                        break;
+                    case "exit":
+                        // shutdown application
+                        // run = false;
+                        System.exit(1); // remove, shutdown gracefully
+                        break;
+                }
+            }
+            catch (Exception e){
+                e.printStackTrace();
+                System.err.println("Invalid input!");
             }
         }
 

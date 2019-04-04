@@ -12,14 +12,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class ResultRetrieverPool extends Pool {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultRetrieverPool.class);
-    private final Map<String, List<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
+    private final Map<String, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
+
+    private final ConcurrentMap<String, Map<String, Integer>> storedResults = new ConcurrentHashMap<>();
 
     public ResultRetrieverPool(int poolSize) {
         super(poolSize);
@@ -31,68 +32,78 @@ public class ResultRetrieverPool extends Pool {
             return;
         }
 
-        List<CompletableFuture<Result<Map<String, Integer>>>> list = queryResultsMap.putIfAbsent(query, new ArrayList<>()); // TODO: reconsider?
+        ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> list = queryResultsMap.putIfAbsent(query, new ConcurrentLinkedQueue<>()); // TODO: reconsider?
         if (list == null) {
             list = queryResultsMap.get(query);
         }
         list.add(result);
     }
 
+    private Map<String, Integer> updateStoredResults(String query, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue) {
+        return storedResults.computeIfAbsent(query, key -> {
+            Map<String, Integer> finalResult = new HashMap<>();
+            while (true) {
+                CompletableFuture<Result<Map<String, Integer>>> item = queue.poll();
+                if (item == null) {
+                    break;
+                }
+                try {
+                    Result<Map<String, Integer>> result = item.get();
+                    if (result.isError()) {
+                        logger.warn("Job error: {}", result.getError());
+                    }
+                    else {
+                        result.getValue().forEach((k ,v) -> {
+                            Integer i = finalResult.getOrDefault(k, 0);
+                            finalResult.put(k, i + v);
+                        });
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            return finalResult;
+        });
+    }
 
     public Map<String, Integer> getResult(String query) {
         // also check if there are jobs in queue for query
 
-        List<CompletableFuture<Result<Map<String, Integer>>>> list = queryResultsMap.get(query);
-
-        if (list == null) {
-            logger.warn("List is empty for query: {}", query);
-            return null;
-        }
-
-        long unfinishedJobs = list.stream().filter(cf -> !cf.isDone()).count();
-
-        if (unfinishedJobs > 0) {
-            logger.warn("{} Jobs are still running.", unfinishedJobs);
-            return null;
-        }
+        ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue = queryResultsMap.get(query);
 
         logger.info("Started collecting jobs by query {}", query);
+        Map<String, Integer> result = updateStoredResults(query, queue);
+        logger.info("Get RESULT: {}", result);
 
-        List<Map<String, Integer>> results = list.stream()
-                .map(cf -> {
-                    try {
-                        return cf.get();
-                    } catch (Exception e) {
-                        return Result.<Map<String, Integer>>error(Error.of(ErrorCode.JOB_ERROR, e.getMessage()));
-                    }
-                })
-                .filter(r -> {
-                    if (r.isError()) {
-                        logger.warn("Job error: {}",r.getError());
-                        return false;
-                    }
-                    return true;
-                })
-                .map(Result::getValue).collect(Collectors.toList());
-
-        logger.info("Finished collecting jobs by query {}", query);
-
-        Map<String, Integer> result = new HashMap<>();
-
-        for (Map<String, Integer> r : results) {
-            r.forEach((k ,v) -> {
-                Integer i = result.getOrDefault(k, 0);
-                result.put(k, i + v);
-            });
-        }
-
-        logger.info("Query RESULT: {}", result);
-
+        storedResults.put(query, result);
         return result;
     }
 
-    public Map<String, Integer> queryResult(String query) {
-        return null;
+    public Result<Map<String, Integer>> queryResult(String query) {
+        ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue = queryResultsMap.get(query);
+
+        if (queue == null) {
+            logger.warn("List is empty for query: {}", query);
+            return Result.error(Error.of(ErrorCode.THERE_ARE_NO_STARTED_JOBS, ""));
+        }
+
+        long unfinishedJobs = queue.stream().filter(cf -> !cf.isDone()).count();
+
+        if (unfinishedJobs > 0) {
+            logger.warn("{} Jobs are still running.", unfinishedJobs);
+            return Result.error(Error.of(ErrorCode.RESULTS_ARE_NOT_AVAILABLE_YET, ""));
+        }
+
+
+
+        // count result?
+
+        Map<String, Integer> result = updateStoredResults(query, queue);
+        logger.info("Query RESULT: {}", result);
+
+
+
+        return Result.of(result);
     }
 
     public void clearSummary(ScanType summaryType) {

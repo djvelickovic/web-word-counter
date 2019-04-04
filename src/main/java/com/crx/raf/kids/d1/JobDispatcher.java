@@ -28,19 +28,26 @@ public class JobDispatcher implements Runnable {
     @Override
     public void run() {
         while (run) {
-            Job job = jobQueue.poll();
-            switch (job.getType()) {
-                case WEB:
-                    webScannerPool.assignJob(job);
-                    break;
-                case FILE:
-                    fileScannerPool.assignJob(job);
-                    break;
-                case POISON:
-                    run = false;
-                    break;
-                default:
-                    logger.error("Unknown job type {}", job.getType());
+
+            try {
+
+                Job job = jobQueue.poll();
+                switch (job.getType()) {
+                    case WEB:
+                        webScannerPool.assignJob(job);
+                        break;
+                    case FILE:
+                        fileScannerPool.assignJob(job);
+                        break;
+                    case POISON:
+                        run = false;
+                        break;
+                    default:
+                        logger.error("Unknown job type {}", job.getType());
+                }
+            }
+            catch (Exception e) {
+                logger.error("Error: ", e);
             }
         }
         logger.info("JobDispatcher stopped.");
