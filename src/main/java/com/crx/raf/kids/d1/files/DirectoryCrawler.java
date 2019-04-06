@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -28,13 +29,18 @@ public class DirectoryCrawler implements Runnable {
             try {
                 Thread.sleep(Config.get().getDirCrawlerSleepTime());
 
-                for (String dir : dirs) {
+                Iterator<String> dirIterator = dirs.listIterator();
+
+                while (dirIterator.hasNext()) {
+                    String dir = dirIterator.next();
                     File file = new File(dir);
                     traverseFiles(file);
                 }
 
                 corpusesForCheck.forEach((k, v) -> {
                     System.out.println(k +"  "+v);
+
+
                 });
 
             } catch (InterruptedException e) {
@@ -42,6 +48,9 @@ public class DirectoryCrawler implements Runnable {
             }
         }
     }
+
+
+
 
     private void traverseFiles(File root) {
         if (root.isDirectory()) {

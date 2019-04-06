@@ -1,5 +1,6 @@
 package com.crx.raf.kids.d1.web;
 
+import com.crx.raf.kids.d1.Config;
 import com.crx.raf.kids.d1.job.Job;
 import com.crx.raf.kids.d1.job.JobQueue;
 import com.crx.raf.kids.d1.job.ScanType;
@@ -14,18 +15,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class WebJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(WebJob.class);
     private static final Set<String> doneWebJobQueries = ConcurrentHashMap.newKeySet();
-
 
     private final String uri;
     private final int hops;
@@ -33,11 +33,11 @@ public class WebJob implements Job {
 
     private final Set<String> keywords;
 
-    public WebJob(Set<String> keywords, String uri, int hops, JobQueue jobQueue) {
+    public WebJob(String uri, int hops, JobQueue jobQueue) {
         this.uri = uri;
         this.hops = hops;
         this.jobQueue = jobQueue;
-        this.keywords = keywords;
+        this.keywords = new HashSet<>(Arrays.asList(Config.get().getKeywords()));
     }
 
     @Override
@@ -87,28 +87,16 @@ public class WebJob implements Job {
             for (Element link : links) {
                 String l = link.attr("abs:href");
                 if (l.startsWith("http")) {
-                    jobQueue.add(new WebJob(keywords, l, hops - 1, jobQueue));
+                    jobQueue.add(new WebJob(l, hops - 1, jobQueue));
                     logger.info("Link: ({})", l);
                 }
                 else {
                     logger.error("UNKNOWN PROTOCOL: {}", l);
                 }
             }
-//            Arrays.stream(doc.body().text().trim().split("\\s+")).filter(words::contains).map()
 
             String[] words = doc.body().text().trim().split("\\s+");
-
-            Map<String, Integer> map = new HashMap<>();
-
-            for (String keyword : keywords) {
-                int count = 0;
-                for (String word : words) {
-                    if (keyword.equals(word)){
-                        count++;
-                    }
-                }
-                map.put(keyword, count);
-            }
+            Map<String, Integer> map = keywords.stream().collect(Collectors.toMap(keyword -> keyword, keyword -> count(keyword, words)));
             logger.info("RESULT for QUERY {}: {}", getQuery(), map);
             return Result.of(map);
         }
@@ -116,4 +104,9 @@ public class WebJob implements Job {
             return Result.error(Error.of(ErrorCode.CRAWLER_ERROR, e.getMessage()));
         }
     }
+
+    private int count(String keyword, String[] words) {
+        return (int) Stream.of(words).filter(word -> word.equals(keyword)).count();
+    }
+
 }

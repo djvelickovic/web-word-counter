@@ -44,7 +44,7 @@ public class Main {
 
                 switch (tokens[0]) {
                     case "aw":
-                        WebJob webJob = new WebJob(keywords, tokens[1], 1, jobQueue);
+                        WebJob webJob = new WebJob(tokens[1], 1, jobQueue);
                         jobQueue.add(webJob);
                         break;
                     case "get":

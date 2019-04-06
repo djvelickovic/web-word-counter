@@ -5,22 +5,55 @@ import com.crx.raf.kids.d1.job.ScanType;
 import com.crx.raf.kids.d1.util.Error;
 import com.crx.raf.kids.d1.util.ErrorCode;
 import com.crx.raf.kids.d1.util.Result;
+import com.crx.raf.kids.d1.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
-import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 
 public class ResultRetrieverPool extends Pool {
 
     private static final Logger logger = LoggerFactory.getLogger(ResultRetrieverPool.class);
-    private final Map<String, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
+
+    private final ConcurrentMap<String, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ConcurrentLinkedQueue<Map<String, Integer>>> calculatedResults = new ConcurrentHashMap<>();
 
     private final ConcurrentMap<String, Map<String, Integer>> storedResults = new ConcurrentHashMap<>();
+
+
+    boolean calculateNext(String query) {
+        ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue = queryResultsMap.get(query);
+        if (queue == null) {
+            return false;
+        }
+        CompletableFuture<Result<Map<String, Integer>>> cf = queue.poll();
+        if (cf == null) {
+            return false;
+        }
+        try {
+            Result<Map<String, Integer>> result = cf.get();
+
+            if (result.isError()) {
+                logger.error("{}", result);
+                return false;
+            }
+            ConcurrentLinkedQueue<Map<String, Integer>> resultQueue = calculatedResults.putIfAbsent(query, new ConcurrentLinkedQueue<>());
+            if (resultQueue == null){
+                resultQueue = calculatedResults.get(query);
+            }
+            resultQueue.add(result.getValue());
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
 
     public ResultRetrieverPool(int poolSize) {
         super(poolSize);
@@ -39,44 +72,32 @@ public class ResultRetrieverPool extends Pool {
         list.add(result);
     }
 
-    private Map<String, Integer> updateStoredResults(String query, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue) {
-        return storedResults.computeIfAbsent(query, key -> {
-            Map<String, Integer> finalResult = new HashMap<>();
-            while (true) {
-                CompletableFuture<Result<Map<String, Integer>>> item = queue.poll();
-                if (item == null) {
-                    break;
-                }
-                try {
-                    Result<Map<String, Integer>> result = item.get();
-                    if (result.isError()) {
-                        logger.warn("Job error: {}", result.getError());
-                    }
-                    else {
-                        result.getValue().forEach((k ,v) -> {
-                            Integer i = finalResult.getOrDefault(k, 0);
-                            finalResult.put(k, i + v);
-                        });
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-            return finalResult;
+
+    private boolean updateStoredResults(String query) {
+        ConcurrentLinkedQueue<Map<String, Integer>> partialResultQueue = calculatedResults.get(query);
+        if (partialResultQueue == null) {
+            return false;
+        }
+
+        Map<String, Integer> partialResult = partialResultQueue.poll();
+        if (partialResult == null) {
+            return false;
+        }
+
+        storedResults.putIfAbsent(query, new HashMap<>());
+        storedResults.computeIfPresent(query, (key, value) -> {
+            return Util.addMaps(value, partialResult);
         });
+        return true;
     }
 
     public Map<String, Integer> getResult(String query) {
         // also check if there are jobs in queue for query
 
-        ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>> queue = queryResultsMap.get(query);
+        while (calculateNext(query));
+        while (updateStoredResults(query));
 
-        logger.info("Started collecting jobs by query {}", query);
-        Map<String, Integer> result = updateStoredResults(query, queue);
-        logger.info("Get RESULT: {}", result);
-
-        storedResults.put(query, result);
-        return result;
+        return storedResults.get(query);
     }
 
     public Result<Map<String, Integer>> queryResult(String query) {
@@ -94,16 +115,11 @@ public class ResultRetrieverPool extends Pool {
             return Result.error(Error.of(ErrorCode.RESULTS_ARE_NOT_AVAILABLE_YET, ""));
         }
 
+        // this will not be a blocking part because jobs are already checked that are done
+        while (calculateNext(query));
+        while (updateStoredResults(query));
 
-
-        // count result?
-
-        Map<String, Integer> result = updateStoredResults(query, queue);
-        logger.info("Query RESULT: {}", result);
-
-
-
-        return Result.of(result);
+        return Result.of(storedResults.get(query));
     }
 
     public void clearSummary(ScanType summaryType) {
@@ -111,6 +127,7 @@ public class ResultRetrieverPool extends Pool {
     }
 
     public Map<String, Map<String, Integer>> getSummary(ScanType summaryType) {
+
         return null;
     }
     public Map<String, Map<String, Integer>> querySummary(ScanType summaryType) {
