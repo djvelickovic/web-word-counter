@@ -3,14 +3,13 @@ package com.crx.raf.kids.d1;
 import com.crx.raf.kids.d1.files.DirectoryCrawler;
 import com.crx.raf.kids.d1.files.FileScannerPool;
 import com.crx.raf.kids.d1.job.JobQueue;
+import com.crx.raf.kids.d1.job.ScanType;
 import com.crx.raf.kids.d1.result.ResultRetrieverPool;
+import com.crx.raf.kids.d1.util.Result;
 import com.crx.raf.kids.d1.web.WebJob;
 import com.crx.raf.kids.d1.web.WebScannerPool;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 
 public class Main {
 
@@ -41,17 +40,30 @@ public class Main {
             try {
                 String input = scanner.nextLine();
                 String[] tokens = input.split("\\s+");
+                String[] subTokens;
 
                 switch (tokens[0]) {
                     case "aw":
-                        WebJob webJob = new WebJob(tokens[1], 1, jobQueue);
+                        WebJob webJob = new WebJob(tokens[1], Config.get().getHopCount(), jobQueue);
                         jobQueue.add(webJob);
                         break;
                     case "get":
-                        System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
+                        subTokens = tokens[1].split("\\|");
+                        if (subTokens[1].equals("summary")) {
+                            printSummary(resultRetrieverPool.getSummary(ScanType.valueOf(subTokens[0].toUpperCase())));
+                        }
+                        else {
+                            System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
+                        }
                         break;
                     case "query":
-                        System.out.println(resultRetrieverPool.queryResult(tokens[1]).toString());
+                        subTokens = tokens[1].split("\\|");
+                        if (subTokens[1].equals("summary")) {
+                            printSummary(resultRetrieverPool.querySummary(ScanType.valueOf(subTokens[0].toUpperCase())));
+                        }
+                        else {
+                            System.out.println(resultRetrieverPool.queryResult(tokens[1]).toString());
+                        }
                         break;
                     case "ad":
                         directoryCrawler.addDir(tokens[1]);
@@ -61,12 +73,21 @@ public class Main {
                         // run = false;
                         System.exit(1); // remove, shutdown gracefully
                         break;
+                    default:
+                        System.out.println("Unknown command: "+tokens[0]);
+                        break;
                 }
             }
             catch (Exception e){
-                e.printStackTrace();
                 System.err.println("Invalid input!");
             }
         }
+    }
+
+    public static void printSummary(Result<Map<String,Map<String, Integer>>> result) {
+        if (result.isError()) {
+            System.err.println(result.getError());
+        }
+        result.getValue().forEach((k ,v) -> System.out.println(k+" - "+v));
     }
 }

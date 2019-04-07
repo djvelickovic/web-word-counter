@@ -14,7 +14,7 @@ public class Util {
         return keywords.stream().collect(Collectors.toMap(key -> key, key -> map1.getOrDefault(key, 0) + map2.getOrDefault(key, 0)));
     }
 
-    public static Map<String, Integer> addMaps(Map<String, Integer> map1, Map<String, Integer> map2) {
-        return map1.keySet().stream().collect(Collectors.toMap(key -> key, key -> map1.getOrDefault(key, 0) + map2.getOrDefault(key, 0)));
-    }
+//    public static Map<String, Integer> addMaps(Map<String, Integer> map1, Map<String, Integer> map2) {
+//        return map1.keySet().stream().collect(Collectors.toMap(key -> key, key -> map1.getOrDefault(key, 0) + map2.getOrDefault(key, 0)));
+//    }
 }
