@@ -1,5 +1,6 @@
 package com.crx.raf.kids.d1.files;
 
+import com.crx.raf.kids.d1.Config;
 import com.crx.raf.kids.d1.job.Job;
 import com.crx.raf.kids.d1.job.JobQueue;
 import com.crx.raf.kids.d1.job.ScanType;
@@ -11,9 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileReader;
-import java.util.Map;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
@@ -23,15 +22,13 @@ public class FileJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(WebJob.class);
 
-    private final File[] files;
-    private final JobQueue jobQueue;
+    private final List<File> files;
     private final Set<String> keywords;
     private final String corpusName;
 
-    public FileJob(File[] files, JobQueue jobQueue, Set<String> keywords, String corpusName) {
+    public FileJob(List<File> files, String corpusName) {
         this.files = files;
-        this.jobQueue = jobQueue;
-        this.keywords = keywords;
+        this.keywords = new HashSet<>(Arrays.asList(Config.get().getKeywords()));
         this.corpusName = corpusName;
     }
 
@@ -47,7 +44,7 @@ public class FileJob implements Job {
 
     @Override
     public CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executor) {
-        return CompletableFuture.supplyAsync(() -> Result.of(Stream.of(files)
+        return CompletableFuture.supplyAsync(() -> Result.of(files.stream()
                         .map(this::countFromFile)
                         .reduce((map1, map2) -> Util.addMaps(map1, map2, keywords))
                         .orElse(Util.generateCleanMap(keywords))), executor);

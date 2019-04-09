@@ -15,26 +15,19 @@ public class Main {
 
     public static void main(String[] args) {
 
-        boolean run = true;
-
-        DirectoryCrawler directoryCrawler = new DirectoryCrawler();
-        new Thread(directoryCrawler).start();
-
         JobQueue jobQueue = new JobQueue();
 
         ResultRetrieverPool resultRetrieverPool = new ResultRetrieverPool(Config.get().getResultRetrieverThreadPool());
-
         FileScannerPool fileScannerPool = new FileScannerPool(jobQueue, resultRetrieverPool, Config.get().getFileScannerThreadPool());
         WebScannerPool webScannerPool = new WebScannerPool(jobQueue, resultRetrieverPool, Config.get().getWebScannerThreadPool());
 
-        JobDispatcher jobDispatcher = new JobDispatcher(webScannerPool, fileScannerPool, jobQueue);
+        DirectoryCrawler directoryCrawler = new DirectoryCrawler(jobQueue);
+        new Thread(directoryCrawler).start();
 
+        JobDispatcher jobDispatcher = new JobDispatcher(webScannerPool, fileScannerPool, jobQueue);
         new Thread(jobDispatcher).start();
 
         Scanner scanner = new Scanner(System.in);
-
-        Set<String> keywords = new HashSet<>(Arrays.asList(Config.get().getKeywords()));
-
         while (true) {
 
             try {
@@ -67,6 +60,12 @@ public class Main {
                         break;
                     case "ad":
                         directoryCrawler.addDir(tokens[1]);
+                        break;
+                    case "cws":
+                        resultRetrieverPool.clearSummary(ScanType.WEB);
+                        break;
+                    case "cfs":
+                        resultRetrieverPool.clearSummary(ScanType.FILE);
                         break;
                     case "exit":
                         // shutdown application

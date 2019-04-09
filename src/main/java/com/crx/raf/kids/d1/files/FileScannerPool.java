@@ -4,8 +4,17 @@ import com.crx.raf.kids.d1.ScannerPool;
 import com.crx.raf.kids.d1.job.Job;
 import com.crx.raf.kids.d1.job.JobQueue;
 import com.crx.raf.kids.d1.result.ResultRetrieverPool;
+import com.crx.raf.kids.d1.util.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 public class FileScannerPool extends ScannerPool {
+
+    private static final Logger logger = LoggerFactory.getLogger(FileScannerPool.class);
 
     public FileScannerPool(JobQueue jobQueue, ResultRetrieverPool resultRetrieverPool, int poolSize) {
         super(jobQueue, resultRetrieverPool, poolSize);
@@ -13,6 +22,12 @@ public class FileScannerPool extends ScannerPool {
 
     @Override
     public void assignJob(Job job) {
-
+        Result<String> queryResult = job.getQuery();
+        if (queryResult.isError()) {
+            logger.warn("Unable to reach job query. Error: {}", queryResult.getError());
+            return;
+        }
+        CompletableFuture<Result<Map<String, Integer>>> future = job.initiate(executorService);
+        resultRetrieverPool.addCorpusResult(queryResult.getValue(), future);
     }
 }

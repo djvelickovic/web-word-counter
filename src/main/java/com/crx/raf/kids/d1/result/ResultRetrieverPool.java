@@ -21,12 +21,11 @@ public class ResultRetrieverPool extends Pool {
     private final ConcurrentMap<String, ConcurrentLinkedQueue<CompletableFuture<Result<Map<String, Integer>>>>> queryResultsMap = new ConcurrentHashMap<>();
 //    private final ConcurrentMap<String, ConcurrentLinkedQueue<Map<String, Integer>>> calculatedResults = new ConcurrentHashMap<>();
 
-    private final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = new ConcurrentHashMap<>();
 
-    private final ConcurrentMap<String, Map<String, Integer>> storedResults = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, Map<String, Integer>> storedResults = new ConcurrentHashMap<>();
 
     private final Set<String> keywords = new HashSet<>(Arrays.asList(Config.get().getKeywords()));
-
 
     public ResultRetrieverPool(int poolSize) {
         super(poolSize);
@@ -46,7 +45,10 @@ public class ResultRetrieverPool extends Pool {
     }
 
     public Result<Map<String, Integer>> getResult(String query) {
-        CompletableFuture<Void> job = jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query));
+        final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = this.jobsByQuery;
+        final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
+
+        CompletableFuture<Void> job = jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults));
         if (job == null) {
             job = jobsByQuery.get(query);
         }
@@ -59,7 +61,10 @@ public class ResultRetrieverPool extends Pool {
     }
 
     public Result<Map<String, Integer>> queryResult(String query) {
-        CompletableFuture<Void> job = jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query));
+        final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = this.jobsByQuery;
+        final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
+
+        CompletableFuture<Void> job = jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults));
         if (job == null) {
             job = jobsByQuery.get(query);
         }
@@ -70,14 +75,22 @@ public class ResultRetrieverPool extends Pool {
     }
 
     public void clearSummary(ScanType summaryType) {
+        storedResults = storedResults.entrySet()
+                .stream()
+                .filter(e -> !e.getKey().startsWith(summaryType.name().toLowerCase()))
+                .collect(Collectors.toConcurrentMap(e -> e.getKey(), e -> e.getValue()));
 
+        jobsByQuery = new ConcurrentHashMap<>();
     }
 
     public Result<Map<String, Map<String, Integer>>> getSummary(ScanType scanType) {
+        final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = this.jobsByQuery;
+        final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
+
         queryResultsMap.keySet().stream()
                 .filter(query -> query.startsWith(scanType.name().toLowerCase()))
                 .filter(query -> !jobsByQuery.containsKey(query))
-                .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query)));
+                .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
 
         jobsByQuery.forEach((k, v) -> {
             try {
@@ -93,10 +106,13 @@ public class ResultRetrieverPool extends Pool {
     }
 
     public Result<Map<String, Map<String, Integer>>> querySummary(ScanType scanType) {
+        final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery = this.jobsByQuery;
+        final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
+
         queryResultsMap.keySet().stream()
                 .filter(query -> query.startsWith(scanType.name().toLowerCase()))
                 .filter(query -> !jobsByQuery.containsKey(query))
-                .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query)));
+                .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
 
         if (!jobsByQuery.entrySet().stream().allMatch(e -> e.getValue().isDone())) {
             return Result.error(Error.of(ErrorCode.RESULTS_ARE_NOT_AVAILABLE_YET, ""));
@@ -107,7 +123,8 @@ public class ResultRetrieverPool extends Pool {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
-    public CompletableFuture<Void> initiateCalculationForQuery(String query) {
+    public CompletableFuture<Void> initiateCalculationForQuery(String query, final ConcurrentMap<String, CompletableFuture<Void>> jobsByQuery, final ConcurrentMap<String, Map<String, Integer>> storedResults) {
+
         if (jobsByQuery.containsKey(query)) {
             return CompletableFuture.completedFuture(null);
         }
