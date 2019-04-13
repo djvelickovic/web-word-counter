@@ -18,6 +18,7 @@ import java.net.URI;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -25,7 +26,7 @@ import java.util.stream.Stream;
 public class WebJob implements Job {
 
     private static final Logger logger = LoggerFactory.getLogger(WebJob.class);
-    private static final Set<String> doneWebJobQueries = ConcurrentHashMap.newKeySet();
+    private static final ConcurrentMap<String, Long> doneWebJobQueries = new ConcurrentHashMap<>();
 
     private final String uri;
     private final int hops;
@@ -68,11 +69,31 @@ public class WebJob implements Job {
 
     private Result<Map<String, Integer>> job() {
         try {
-            if (!doneWebJobQueries.add(uri)) {
+            Long millis = doneWebJobQueries.putIfAbsent(uri, System.currentTimeMillis());
+
+            if (millis == null) { // uri haven't added before
+                return doJob();
+            }
+
+            millis = doneWebJobQueries.get(uri);
+
+            if (System.currentTimeMillis() - millis < Config.get().getUrlRefreshTime()) { // uri haven't expired
                 logger.info("Skipping job {}", uri);
                 return Result.of(new HashMap<>());
             }
+            else { // uri has expired. clean it
+                doneWebJobQueries.remove(uri);
+            }
+            // retry
+            return job();
+        }
+        catch (Exception e){
+            return Result.error(Error.of(ErrorCode.CRAWLER_ERROR, e.getMessage()));
+        }
+    }
 
+    private Result<Map<String, Integer>> doJob() {
+        try {
             if (uri.endsWith(".pdf") || uri.endsWith(".jpg") || uri.endsWith(".docx") || uri.endsWith(".rar")){
                 logger.info("Skipping. Format unsupported. {}...", uri);
                 return Result.of(new HashMap<>());

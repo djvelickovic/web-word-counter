@@ -46,7 +46,7 @@ public class Main {
                             printSummary(resultRetrieverPool.getSummary(ScanType.valueOf(subTokens[0].toUpperCase())));
                         }
                         else {
-                            System.out.println(resultRetrieverPool.getResult(tokens[1]).toString());
+                            printResult(resultRetrieverPool.getResult(tokens[1]));
                         }
                         break;
                     case "query":
@@ -55,7 +55,7 @@ public class Main {
                             printSummary(resultRetrieverPool.querySummary(ScanType.valueOf(subTokens[0].toUpperCase())));
                         }
                         else {
-                            System.out.println(resultRetrieverPool.queryResult(tokens[1]).toString());
+                            printResult(resultRetrieverPool.queryResult(tokens[1]));
                         }
                         break;
                     case "ad":
@@ -85,8 +85,15 @@ public class Main {
 
     public static void printSummary(Result<Map<String,Map<String, Integer>>> result) {
         if (result.isError()) {
-            System.err.println(result.getError());
+            System.err.println(result.getError().getErrorCode()+" - "+result.getError().getMessage());
         }
         result.getValue().forEach((k ,v) -> System.out.println(k+" - "+v));
+    }
+
+    public static void printResult(Result<Map<String, Integer>> result) {
+        if (result.isError()) {
+            System.err.println(result.getError().getErrorCode()+" - "+result.getError().getMessage());
+        }
+        System.out.println(result.getValue());
     }
 }
