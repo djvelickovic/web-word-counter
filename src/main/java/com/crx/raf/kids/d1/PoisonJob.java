@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
-public class PoisonPillJob implements Job {
+public class PoisonJob implements Job {
     @Override
     public ScanType getType() {
         return ScanType.POISON;
@@ -20,8 +20,7 @@ public class PoisonPillJob implements Job {
     }
 
     @Override
-    public CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executor) {
+    public Result<CompletableFuture<Result<Map<String, Integer>>>> initiate(Executor executor) {
         return null;
     }
-
 }

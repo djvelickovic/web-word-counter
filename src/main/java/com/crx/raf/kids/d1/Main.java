@@ -28,7 +28,9 @@ public class Main {
         new Thread(jobDispatcher).start();
 
         Scanner scanner = new Scanner(System.in);
-        while (true) {
+
+        boolean run = true;
+        while (run) {
 
             try {
                 String input = scanner.nextLine();
@@ -69,8 +71,8 @@ public class Main {
                         break;
                     case "exit":
                         // shutdown application
-                        // run = false;
-                        System.exit(1); // remove, shutdown gracefully
+                         run = false;
+                         jobQueue.add(new PoisonJob());
                         break;
                     default:
                         System.out.println("Unknown command: "+tokens[0]);
@@ -86,6 +88,7 @@ public class Main {
     public static void printSummary(Result<Map<String,Map<String, Integer>>> result) {
         if (result.isError()) {
             System.err.println(result.getError().getErrorCode()+" - "+result.getError().getMessage());
+            return;
         }
         result.getValue().forEach((k ,v) -> System.out.println(k+" - "+v));
     }
@@ -93,6 +96,7 @@ public class Main {
     public static void printResult(Result<Map<String, Integer>> result) {
         if (result.isError()) {
             System.err.println(result.getError().getErrorCode()+" - "+result.getError().getMessage());
+            return;
         }
         System.out.println(result.getValue());
     }

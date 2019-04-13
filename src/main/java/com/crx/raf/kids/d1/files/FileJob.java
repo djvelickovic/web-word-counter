@@ -45,11 +45,11 @@ public class FileJob implements Job {
     }
 
     @Override
-    public CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executor) {
-        return CompletableFuture.supplyAsync(() -> Result.of(files.stream()
+    public Result<CompletableFuture<Result<Map<String, Integer>>>> initiate(Executor executor) {
+        return Result.of(CompletableFuture.supplyAsync(() -> Result.of(files.stream()
                         .map(this::countFromFile)
                         .reduce((map1, map2) -> Util.addMaps(map1, map2, keywords))
-                        .orElse(Util.generateCleanMap(keywords))), executor);
+                        .orElse(Util.generateCleanMap(keywords))), executor));
     }
 
     private Map<String, Integer> countFromFile(File file) {

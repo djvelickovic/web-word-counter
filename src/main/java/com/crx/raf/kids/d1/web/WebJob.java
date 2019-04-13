@@ -52,32 +52,25 @@ public class WebJob implements Job {
     }
 
     @Override
-    public CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executorService) {
-        if (hops < 0) {
-            return CompletableFuture.completedFuture(Result.of(new HashMap<>()));
-        }
-        return CompletableFuture.supplyAsync(this::job, executorService);
-    }
-
-    private Result<Map<String, Integer>> job() {
+    public Result<CompletableFuture<Result<Map<String, Integer>>>> initiate(Executor executorService) {
         try {
             Long millis = doneWebJobQueries.putIfAbsent(uri, System.currentTimeMillis());
 
             if (millis == null) { // uri haven't added before
-                return doJob();
+                return Result.of(CompletableFuture.supplyAsync(this::doJob, executorService));
             }
 
             millis = doneWebJobQueries.get(uri);
 
             if (System.currentTimeMillis() - millis < Config.get().getUrlRefreshTime()) { // uri haven't expired
                 logger.info("Skipping job {}", uri);
-                return Result.of(new HashMap<>());
+                return Result.error(Error.of(ErrorCode.WEB_URL_VISITED, ""));
             }
             else { // uri has expired. clean it
                 doneWebJobQueries.remove(uri);
             }
             // retry
-            return job();
+            return initiate(executorService);
         }
         catch (Exception e){
             return Result.error(Error.of(ErrorCode.CRAWLER_ERROR, e.getMessage()));
@@ -96,15 +89,17 @@ public class WebJob implements Job {
             Document doc = Jsoup.connect(uri).get();
             Elements links = doc.select("a[href]");
 
-            logger.info("Links size: ({})", links.size());
-            for (Element link : links) {
-                String l = link.attr("abs:href");
-                if (l.startsWith("http")) {
-                    jobQueue.add(new WebJob(l, hops - 1, jobQueue));
-                    logger.info("Link: ({})", l);
-                }
-                else {
-                    logger.error("UNKNOWN PROTOCOL: {}", l);
+
+            if (hops > 0) {
+                logger.info("Links size: ({})", links.size());
+                for (Element link : links) {
+                    String l = link.attr("abs:href");
+                    if (l.startsWith("http")) {
+                        jobQueue.add(new WebJob(l, hops - 1, jobQueue));
+                        logger.info("Link: ({})", l);
+                    } else {
+                        logger.error("UNKNOWN PROTOCOL: {}", l);
+                    }
                 }
             }
 

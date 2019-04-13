@@ -14,7 +14,7 @@ public class DirectoryCrawler implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(DirectoryCrawler.class);
 
     private JobQueue jobQueue;
-    private boolean run = true;
+    private volatile boolean run = true;
 
     private List<String> dirs = new CopyOnWriteArrayList<>();
 

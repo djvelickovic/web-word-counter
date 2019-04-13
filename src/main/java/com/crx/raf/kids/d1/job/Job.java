@@ -15,6 +15,6 @@ public interface Job {
 
     Result<String> getQuery();
 
-    CompletableFuture<Result<Map<String, Integer>>> initiate(Executor executor);
+    Result<CompletableFuture<Result<Map<String, Integer>>>> initiate(Executor executor);
 
 }

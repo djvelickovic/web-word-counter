@@ -168,7 +168,9 @@ public class ResultRetrieverPool extends Pool {
             webJobs.entrySet()
                     .stream()
                     .filter(e -> e.getKey().contains(corpusOrDomain))
-                    .forEach(e -> queue.add(e.getValue()));
+                    .forEach(e ->{
+                        queue.add(e.getValue());
+                    });
         }
         else if (query.startsWith("file")) {
             Integer corpusVersion = corpusVersions.get(corpusOrDomain);
@@ -190,6 +192,7 @@ public class ResultRetrieverPool extends Pool {
                 }
                 try {
                     Result<Map<String, Integer>> result = cf.get();
+
                     if (result.isError()) {
                         System.err.println(result);
                         continue;

@@ -27,7 +27,11 @@ public class FileScannerPool extends ScannerPool {
             logger.warn("Unable to reach job query. Error: {}", queryResult.getError());
             return;
         }
-        CompletableFuture<Result<Map<String, Integer>>> future = job.initiate(executorService);
-        resultRetrieverPool.addCorpusResult(queryResult.getValue(), future);
+        Result<CompletableFuture<Result<Map<String, Integer>>>> future = job.initiate(executorService);
+        if (future.isError()) {
+            // log
+            return;
+        }
+        resultRetrieverPool.addCorpusResult(queryResult.getValue(), future.getValue());
     }
 }
