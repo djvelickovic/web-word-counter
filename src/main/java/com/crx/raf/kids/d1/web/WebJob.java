@@ -48,15 +48,7 @@ public class WebJob implements Job {
 
     @Override
     public Result<String> getQuery() {
-        try {
-            String host = new URI(uri).getHost();
-//            System.err.println(host + " - " + uri);
-            return Result.of("web|"+host);
-        }
-        catch (Exception e){
-            logger.error("Unable to fetch host from URI: {}", uri);
-            return Result.error(Error.of(ErrorCode.URL_PARSING_ERROR, e.getMessage()));
-        }
+        return Result.of("web|"+uri);
     }
 
     @Override

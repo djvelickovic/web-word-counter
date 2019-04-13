@@ -25,11 +25,13 @@ public class FileJob implements Job {
     private final List<File> files;
     private final Set<String> keywords;
     private final String corpusName;
+    private final int corpusIteration;
 
-    public FileJob(List<File> files, String corpusName) {
+    public FileJob(List<File> files, String corpusName, int corpusIteration) {
         this.files = files;
         this.keywords = new HashSet<>(Arrays.asList(Config.get().getKeywords()));
         this.corpusName = corpusName;
+        this.corpusIteration= corpusIteration;
     }
 
     @Override
@@ -39,7 +41,7 @@ public class FileJob implements Job {
 
     @Override
     public Result<String> getQuery() {
-        return Result.of("file|"+corpusName);
+        return Result.of("file|"+corpusName+"|"+corpusIteration);
     }
 
     @Override
