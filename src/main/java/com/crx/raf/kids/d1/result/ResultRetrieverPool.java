@@ -10,6 +10,7 @@ import com.crx.raf.kids.d1.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -102,16 +103,43 @@ public class ResultRetrieverPool extends Pool {
         final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
 
         if (scanType == ScanType.FILE) {
-            webJobs.keySet().stream()
-                    .filter(query -> query.startsWith(scanType.name().toLowerCase()))
-                    .filter(query -> !jobsByQuery.containsKey(query))
-                    .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
-        }
-        else if (scanType == ScanType.WEB) {
             fileJobs.keySet().stream()
                     .filter(query -> query.startsWith(scanType.name().toLowerCase()))
                     .filter(query -> !jobsByQuery.containsKey(query))
+                    .map(query -> {
+                        try {
+                            String[] split = query.split("\\|");
+                            return "file|"+split[1];
+                        }
+                        catch (Exception e){
+                            System.err.println("Error parsing "+query);
+                        }
+                        return null;
+                    })
+                    .filter(query -> query != null)
                     .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
+        }
+        else if (scanType == ScanType.WEB) {
+            webJobs.keySet().stream()
+                    .filter(query -> query.startsWith(scanType.name().toLowerCase()))
+                    .map(query -> {
+                        try {
+                            String[] split = query.split("\\|");
+                            String url = split[1];
+                            URI uri = new URI(url);
+
+                            return "web|"+uri.getHost();
+                        }
+                        catch (Exception e) {
+                            System.err.println("Error parsing " + query);
+                        }
+                        return null;
+                    })
+                    .filter(host -> host != null)
+                    .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
+        }
+        else {
+            return Result.error(Error.of(ErrorCode.UNKNOWN_COMMAND, ""));
         }
 
         jobsByQuery.forEach((k, v) -> {
@@ -132,19 +160,45 @@ public class ResultRetrieverPool extends Pool {
         final ConcurrentMap<String, Map<String, Integer>> storedResults = this.storedResults;
 
         if (scanType == ScanType.FILE) {
-            webJobs.keySet().stream()
-                    .filter(query -> query.startsWith(scanType.name().toLowerCase()))
-                    .filter(query -> !jobsByQuery.containsKey(query))
-                    .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
-        }
-        else if (scanType == ScanType.WEB) {
             fileJobs.keySet().stream()
                     .filter(query -> query.startsWith(scanType.name().toLowerCase()))
                     .filter(query -> !jobsByQuery.containsKey(query))
+                    .map(query -> {
+                        try {
+                            String[] split = query.split("\\|");
+                            return "file|"+split[1];
+                        }
+                        catch (Exception e){
+                            System.err.println("Error parsing "+query);
+                        }
+                        return null;
+                    })
+                    .filter(query -> query != null)
                     .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
         }
+        else if (scanType == ScanType.WEB) {
+            webJobs.keySet().stream()
+                    .filter(query -> query.startsWith(scanType.name().toLowerCase()))
+                    .map(query -> {
+                        try {
+                            String[] split = query.split("\\|");
+                            String url = split[1];
+                            URI uri = new URI(url);
+                            return "web|"+uri.getHost();
+                        }
+                        catch (Exception e) {
+                            System.err.println("Error parsing " + query);
+                        }
+                        return null;
+                    })
+                    .filter(host -> host != null)
+                    .forEach(query -> jobsByQuery.putIfAbsent(query, initiateCalculationForQuery(query, jobsByQuery, storedResults)));
+        }
+        else {
+            return Result.error(Error.of(ErrorCode.UNKNOWN_COMMAND, ""));
+        }
 
-        if (!jobsByQuery.entrySet().stream().allMatch(e -> e.getValue().isDone())) {
+        if (!jobsByQuery.entrySet().stream().filter(e -> e.getKey().startsWith(scanType.name().toLowerCase())).allMatch(e -> e.getValue().isDone())) {
             return Result.error(Error.of(ErrorCode.RESULTS_ARE_NOT_AVAILABLE_YET, ""));
         }
 
