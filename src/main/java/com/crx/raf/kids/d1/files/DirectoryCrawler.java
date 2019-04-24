@@ -60,6 +60,7 @@ public class DirectoryCrawler implements Runnable {
                 e.printStackTrace();
             }
         }
+        System.out.println("Directory crawler stopped...");
     }
 
     void dispatchJobs(String corpus, File[] files, int corpusVersion) {

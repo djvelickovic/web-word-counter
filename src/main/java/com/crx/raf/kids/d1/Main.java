@@ -73,6 +73,10 @@ public class Main {
                         // shutdown application
                          run = false;
                          jobQueue.add(new PoisonJob());
+                         directoryCrawler.stop();
+                         resultRetrieverPool.stop();
+                         webScannerPool.stop();
+                         fileScannerPool.stop();
                         break;
                     default:
                         System.out.println("Unknown command: "+tokens[0]);
@@ -83,6 +87,7 @@ public class Main {
                 System.err.println("Invalid input!");
             }
         }
+        System.out.println("Main finished...");
     }
 
     public static void printSummary(Result<Map<String,Map<String, Integer>>> result) {

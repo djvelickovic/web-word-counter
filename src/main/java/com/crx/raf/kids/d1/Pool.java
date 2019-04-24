@@ -10,4 +10,8 @@ public abstract class Pool {
     public Pool(int poolSize) {
         this.executorService = Executors.newFixedThreadPool(poolSize);
     }
+
+    public void stop() {
+        executorService.shutdown();
+    }
 }

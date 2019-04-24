@@ -50,6 +50,6 @@ public class JobDispatcher implements Runnable {
                 logger.error("Error: ", e);
             }
         }
-        logger.info("JobDispatcher stopped.");
+        System.out.println("Job dispatcher stopped...");
     }
 }
